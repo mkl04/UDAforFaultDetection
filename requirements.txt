@@ -9,3 +9,4 @@ scikit-image==0.21.0
 albumentations==0.5.1
 cmapy==0.6.6
 tqdm==4.46.0
+torchmetrics==1.0.1
