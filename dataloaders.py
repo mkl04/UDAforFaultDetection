@@ -10,7 +10,8 @@ from albumentations import (
     HorizontalFlip, VerticalFlip, 
     ShiftScaleRotate, OpticalDistortion, GridDistortion, ElasticTransform, 
     RandomBrightnessContrast, 
-    IAASharpen, IAAEmboss, OneOf, Compose   
+    IAASharpen, IAAEmboss, OneOf, Compose,
+    FDA
 )
 # https://albumentations.ai/docs/getting_started/setting_probabilities/
 
@@ -40,7 +41,7 @@ class ThebeGenerator(Dataset):
         self.rootPath = root
         self.list_IDs = os.listdir(os.path.join(self.rootPath, self.split, 'seismic'))
         self.aug = aug
-        self.domain = root.split('_')[1]
+        self.domain = os.path.basename(root).split('_')[0]
         
         if red > 0 :
             n_imgs = len(self.list_IDs)//red
@@ -64,13 +65,13 @@ class ThebeGenerator(Dataset):
         """
         ID = self.list_IDs[index]
         
-        X = np.load(os.path.join(self.rootPath, self.split, 'seismic', ID))
+        X = np.load(os.path.join(self.rootPath, self.split, 'seismic', ID)).astype(np.single)
 
         if self.domain == 'tgt': # since there is no labels, it loads the same input
-            y = np.load(os.path.join(self.rootPath, self.split, 'seismic', ID ))
+            y = np.load(os.path.join(self.rootPath, self.split, 'seismic', ID )).astype(np.single)
         else:
             y = np.load(os.path.join(self.rootPath, self.split, 'faults', ID )).astype(np.float32)
-        
+
         if self.aug:
             X, y = self.augmentation(X,y)
         
@@ -118,6 +119,8 @@ class FaultSeg2DGenerator(Dataset):
         red (int): Factor of reduction of training images
         n_imgs (int): Number of training images if 'red' was not defined
         aug (str): Augmentation options
+        ref_imgs (list): images from target domain (only if apply DA)
+        Lb (float): beta parameter (only if apply FDA)
 
     Methods:
         __getitem__(index): Get a data sample and its label by index
@@ -125,7 +128,8 @@ class FaultSeg2DGenerator(Dataset):
         augmentation: Make the data augmentation
     """
     
-    def __init__(self, root, split, red=1, n_imgs=32, aug=False):
+    def __init__(self, root, split, red=1, n_imgs=32, aug=False,
+                 ref_imgs=None, Lb=None):
 
         np.random.seed(42)
         
@@ -133,24 +137,25 @@ class FaultSeg2DGenerator(Dataset):
         self.rootPath = root
         self.list_IDs = os.listdir(os.path.join(self.rootPath, self.split, 'seis'))
         self.aug = aug
-        self.dim = (128,128,128)
+        self.ref_imgs = ref_imgs
+        self.Lb = Lb
         
         self.list_X = []
         self.list_y = []
         for ID in self.list_IDs:
             X = np.fromfile(os.path.join(self.rootPath, self.split, 'seis', ID), dtype=np.single)
             y = np.fromfile(os.path.join(self.rootPath, self.split, 'fault', ID), dtype=np.single)
-            X = np.reshape(X, self.dim)
-            y = np.reshape(y, self.dim).astype(np.float32)
+            X = np.reshape(X, (128,128,128))
+            y = np.reshape(y, (128,128,128)).astype(np.float32)
             
             X = (X-np.mean(X))/np.std(X)
             
             for i in range(128):
                 self.list_X.append(X[i].T)
                 self.list_y.append(y[i].T)
-            # for x in range(128):
-            #     self.list_X.append(X[:,x].T)
-            #     self.list_y.append(y[:,x].T)
+            for x in range(128):
+                self.list_X.append(X[:,x].T)
+                self.list_y.append(y[:,x].T)
                 
         self.list_IDs = [x for x in range(len(self.list_X))]
         
@@ -204,6 +209,21 @@ class FaultSeg2DGenerator(Dataset):
                 GridDistortion(p=1),
                 OpticalDistortion(p=1)
             ], p=0.9)
+
+        if self.aug == "type1_fda":
+            aug = Compose([
+                FDA(self.ref_imgs, p=1, beta_limit=self.Lb, read_fn=lambda x:x),
+                OneOf([
+                ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.2, rotate_limit=45, p=1),
+                IAASharpen(p=1),
+                IAAEmboss(p=1),
+                RandomBrightnessContrast(p=1),
+                VerticalFlip(p=1),
+                Compose([VerticalFlip(p=0.5), HorizontalFlip(p=0.5)]),
+                ElasticTransform(p=1, alpha=400, sigma=400 * 0.05, alpha_affine=400 * 0.03),
+                GridDistortion(p=1),
+                OpticalDistortion(p=1)
+            ], p=0.9)])
             
         augmented = aug(image=X, mask=y)
         return augmented['image'], augmented['mask']
