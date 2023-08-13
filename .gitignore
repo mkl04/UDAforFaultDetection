@@ -131,3 +131,5 @@ dmypy.json
 
 #tmp
 config.py
+evaluation/01-TH-TH-at-colormap.ipynb
+training/*.pt
