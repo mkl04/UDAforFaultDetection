@@ -77,9 +77,9 @@ The following table shows the results of the metrics for our best model using a 
 
 | Technique | Model | IOU | F1-score |
 |:----: | :----: | :----: | :----: |
-| No-Adaptation |Atrous U-Net     | 0.629 | 0.823  |
-| MMD | U-Net    | 0.553 | 0.842  |
-| DANN | Atrous U-Net       | 0.777 | 0.847  |
-| FDA | Atrous U-Net  | **0.909** | **0.856** | **0.860** |
+| No-Adaptation |Atrous U-Net     | 54.16 | 70.19  |
+| MMD | U-Net    | 54.30 | 70.29  |
+| DANN | Atrous U-Net       | 53.57 | 69.69  |
+| FDA | Atrous U-Net  | **57.05** | **72.58** |
 
 For better inspection, the final version of the dissertation will be posted soon.
